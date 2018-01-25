@@ -312,6 +312,50 @@ public:
 };
 static CBSafeNetParams bSafeParams;
 
+class CBSafeNetLongTerm1Params : public CBSafeNetParams {
+public:
+    CBSafeNetLongTerm1Params()
+    {
+        strNetworkID = "bsafenetlt1";
+        pchMessageStart[0] += 0x10;
+        nDefaultPort += 100;
+    }
+};
+
+class CBSafeNetLongTerm2Params : public CBSafeNetParams {
+public:
+    CBSafeNetLongTerm2Params()
+    {
+        strNetworkID = "bsafenetlt2";
+        pchMessageStart[0] += 0x20;
+        nDefaultPort += 200;
+
+        consensus.nNewPoWHashStartHeight = 100;
+    }
+};
+
+class CBSafeNetLongTerm3Params : public CBSafeNetParams {
+public:
+    CBSafeNetLongTerm3Params()
+    {
+        strNetworkID = "bsafenetlt3";
+        pchMessageStart[0] += 0x30;
+        nDefaultPort += 300;
+
+        consensus.nNewPoWHashStartHeight = 100;
+    
+        Consensus::ArchiveHashParams archive;
+        archive.nStartHeight = 200;
+        archive.nBlocksPerHash = 10;
+        archive.nBlocks = 10;
+        consensus.vArchiveHashes.push_back(archive);
+    }
+};
+
+static CBSafeNetLongTerm1Params bSafelt1Params;
+static CBSafeNetLongTerm2Params bSafelt2Params;
+static CBSafeNetLongTerm3Params bSafelt3Params;
+
 /**
  * Regression test
  */
@@ -408,6 +452,12 @@ CChainParams& Params(const std::string& chain)
             return testNetParams;
     else if (chain == CBaseChainParams::BSAFENET)
         return bSafeParams;
+    else if (chain == CBaseChainParams::BSAFENETLT1)
+        return bSafelt1Params;
+    else if (chain == CBaseChainParams::BSAFENETLT2)
+        return bSafelt2Params;
+    else if (chain == CBaseChainParams::BSAFENETLT3)
+        return bSafelt3Params;
     else if (chain == CBaseChainParams::REGTEST)
             return regTestParams;
     else

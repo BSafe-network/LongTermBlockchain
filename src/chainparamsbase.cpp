@@ -14,6 +14,9 @@ const std::string CBaseChainParams::MAIN = "main";
 const std::string CBaseChainParams::TESTNET = "test";
 const std::string CBaseChainParams::REGTEST = "regtest";
 const std::string CBaseChainParams::BSAFENET = "bsafenet";
+const std::string CBaseChainParams::BSAFENETLT1 = "bsafenetlt1";
+const std::string CBaseChainParams::BSAFENETLT2 = "bsafenetlt2";
+const std::string CBaseChainParams::BSAFENETLT3 = "bsafenetlt3";
 
 void AppendParamsHelpMessages(std::string& strUsage, bool debugHelp)
 {
@@ -67,6 +70,39 @@ public:
 };
 static CBaseSafeNetParams bSafeParams;
 
+class CBaseSafeNetLT1Params : public CBaseChainParams
+{
+public:
+    CBaseSafeNetLT1Params()
+    {
+        nRPCPort = 34822 + 100;
+        strDataDir = "bsafenetlt1";
+    }
+};
+static CBaseSafeNetLT1Params bSafelt1Params;
+
+class CBaseSafeNetLT2Params : public CBaseChainParams
+{
+public:
+    CBaseSafeNetLT2Params()
+    {
+        nRPCPort = 34822 + 200;
+        strDataDir = "bsafenetlt2";
+    }
+};
+static CBaseSafeNetLT2Params bSafelt2Params;
+
+class CBaseSafeNetLT3Params : public CBaseChainParams
+{
+public:
+    CBaseSafeNetLT3Params()
+    {
+        nRPCPort = 34822 + 300;
+        strDataDir = "bsafenetlt3";
+    }
+};
+static CBaseSafeNetLT3Params bSafelt3Params;
+
 /*
  * Regression test
  */
@@ -99,6 +135,12 @@ CBaseChainParams& BaseParams(const std::string& chain)
         return regTestParams;
     else if (chain == CBaseChainParams::BSAFENET)
         return bSafeParams;
+    else if (chain == CBaseChainParams::BSAFENETLT1)
+            return bSafelt1Params;
+    else if (chain == CBaseChainParams::BSAFENETLT2)
+            return bSafelt2Params;
+    else if (chain == CBaseChainParams::BSAFENETLT3)
+            return bSafelt3Params;
     else
         throw std::runtime_error(strprintf("%s: Unknown chain %s.", __func__, chain));
 }
@@ -116,8 +158,11 @@ std::string ChainNameFromCommandLine()
     if (fTestNet && fRegTest)
         throw std::runtime_error("Invalid combination of -regtest and -testnet.");
     bool fbsafeNet = GetBoolArg("-bsafenet", false);
-
-    if ((int)fRegTest + (int)fTestNet + (int)fbsafeNet > 1)
+    bool fbsafenetlt1 = GetBoolArg("-bsafenetlt1", false);
+    bool fbsafenetlt2 = GetBoolArg("-bsafenetlt2", false);
+    bool fbsafenetlt3 = GetBoolArg("-bsafenetlt3", false);
+    
+    if ((int)fRegTest + (int)fTestNet + (int)fbsafeNet  + (int)fbsafenetlt1 + (int)fbsafenetlt2 + (int)fbsafenetlt3> 1)
         throw std::runtime_error("Invalid combination of -regtest, -testnet, -bsafenet.");
     if (fRegTest)
         return CBaseChainParams::REGTEST;
@@ -125,6 +170,12 @@ std::string ChainNameFromCommandLine()
         return CBaseChainParams::TESTNET;
     if (fbsafeNet)
         return CBaseChainParams::BSAFENET;
+    if (fbsafenetlt1)
+        return CBaseChainParams::BSAFENETLT1;
+    if (fbsafenetlt2)
+        return CBaseChainParams::BSAFENETLT2;
+    if (fbsafenetlt3)
+        return CBaseChainParams::BSAFENETLT3;
     return CBaseChainParams::MAIN;
 }
 

@@ -20,7 +20,10 @@ public:
     static const std::string TESTNET;
     static const std::string REGTEST;
     static const std::string BSAFENET;
-
+    static const std::string BSAFENETLT1;
+    static const std::string BSAFENETLT2;
+    static const std::string BSAFENETLT3;
+    
     const std::string& DataDir() const { return strDataDir; }
     int RPCPort() const { return nRPCPort; }
 
