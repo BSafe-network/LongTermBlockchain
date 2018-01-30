@@ -319,6 +319,7 @@ public:
         strNetworkID = "bsafenetlt1";
         pchMessageStart[0] += 0x10;
         nDefaultPort += 100;
+        vFixedSeeds.clear();
     }
 };
 
@@ -329,7 +330,8 @@ public:
         strNetworkID = "bsafenetlt2";
         pchMessageStart[0] += 0x20;
         nDefaultPort += 200;
-
+        vFixedSeeds.clear();
+        
         consensus.nNewPoWHashStartHeight = 100;
     }
 };
@@ -341,7 +343,8 @@ public:
         strNetworkID = "bsafenetlt3";
         pchMessageStart[0] += 0x30;
         nDefaultPort += 300;
-
+        vFixedSeeds.clear();
+        
         consensus.nNewPoWHashStartHeight = 100;
     
         Consensus::ArchiveHashParams archive;
