@@ -13,6 +13,9 @@
 #include "script/script.h"
 #include "uint256.h"
 
+#include "util.h"
+#include "core_io.h"
+
 using namespace std;
 
 typedef vector<unsigned char> valtype;
@@ -78,6 +81,10 @@ bool static IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
             //  Non-canonical public key: invalid length for compressed key
             return false;
         }
+    } else if (vchPubKey[0] == 0x82 || vchPubKey[0] == 0x83) {
+        if (vchPubKey.size() != 49) {
+            return false;
+        }
     } else {
         //  Non-canonical public key: neither compressed nor uncompressed
         return false;
@@ -122,7 +129,10 @@ bool static IsValidSignatureEncoding(const std::vector<unsigned char> &sig) {
 
     // Minimum and maximum size constraints.
     if (sig.size() < 9) return false;
-    if (sig.size() > 73) return false;
+    if (sig.size() > 73) {
+        // TODO
+        return true;
+    }
 
     // A signature is of type 0x30 (compound).
     if (sig[0] != 0x30) return false;

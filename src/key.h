@@ -42,42 +42,75 @@ private:
     //! Whether the public key corresponding to this private key is (to be) compressed.
     bool fCompressed;
 
+    bool fUseNewEC;
+    void *newECKey;
     //! The actual byte data
-    unsigned char vch[32];
+    unsigned char vch[32 + 16];
 
     //! Check whether the 32-byte array pointed to be vch is valid keydata.
     bool static Check(const unsigned char* vch);
+    bool static CheckEx(const unsigned char* vch);
 
+    void static *CopyNewECKey(void *k);
+    void static DeleteNewECKey(void *k);
+    
 public:
     //! Construct an invalid private key.
-    CKey() : fValid(false), fCompressed(false)
+    CKey() : fValid(false), fCompressed(false), fUseNewEC(false), newECKey(NULL)
     {
         LockObject(vch);
     }
 
     //! Copy constructor. This is necessary because of memlocking.
-    CKey(const CKey& secret) : fValid(secret.fValid), fCompressed(secret.fCompressed)
+    CKey(const CKey& secret) : fValid(secret.fValid), fCompressed(secret.fCompressed), fUseNewEC(secret.fUseNewEC)
     {
         LockObject(vch);
         memcpy(vch, secret.vch, sizeof(vch));
+        newECKey = CopyNewECKey(secret.newECKey);
+    }
+
+    CKey& operator=(const CKey& secret)
+    {
+        fValid = secret.fValid;
+        fCompressed = secret.fCompressed;
+        fUseNewEC = secret.fUseNewEC;
+        memcpy(vch, secret.vch, sizeof(vch));
+        newECKey = CopyNewECKey(secret.newECKey);
+        return *this;        
     }
 
     //! Destructor (again necessary because of memlocking).
     ~CKey()
     {
         UnlockObject(vch);
+        DeleteNewECKey(newECKey);
     }
 
     friend bool operator==(const CKey& a, const CKey& b)
     {
-        return a.fCompressed == b.fCompressed && a.size() == b.size() &&
+        return a.fCompressed == b.fCompressed && a.fUseNewEC == b.fUseNewEC && a.size() == b.size() &&
                memcmp(&a.vch[0], &b.vch[0], a.size()) == 0;
     }
 
     //! Initialize using begin and end iterators to byte data.
     template <typename T>
-    void Set(const T pbegin, const T pend, bool fCompressedIn)
+    void Set(const T pbegin, const T pend, bool fCompressedIn, bool fUseNewECIn = false)
     {
+        if (fUseNewECIn) {
+            if (pend - pbegin != 48) {
+                fValid = false;
+                return;
+            }
+            if (CheckEx(&pbegin[0])) {
+                memcpy(vch, (unsigned char*)&pbegin[0], 48);
+                fValid = true;
+                fCompressed = fCompressedIn;
+                fUseNewEC = fUseNewECIn;
+            } else {
+                fValid = false;
+            }
+            return;
+        }
         if (pend - pbegin != 32) {
             fValid = false;
             return;
@@ -92,7 +125,7 @@ public:
     }
 
     //! Simple read-only vector-like interface.
-    unsigned int size() const { return (fValid ? 32 : 0); }
+    unsigned int size() const { return (fValid ? fUseNewEC ? 48 : 32 : 0); }
     const unsigned char* begin() const { return vch; }
     const unsigned char* end() const { return vch + size(); }
 
@@ -107,7 +140,8 @@ public:
 
     //! Generate a new private key using a cryptographic PRNG.
     void MakeNewKey(bool fCompressed);
-
+    void MakeNewKeyEx();
+    
     /**
      * Convert the private key to a CPrivKey (serialized OpenSSL private key data).
      * This is expensive. 

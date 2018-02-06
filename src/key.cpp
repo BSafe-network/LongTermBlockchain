@@ -13,6 +13,11 @@
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 
+#include <openssl/objects.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+#include <openssl/bn.h>
+
 static secp256k1_context* secp256k1_context_sign = NULL;
 
 /** These functions are taken from the libsecp256k1 distribution and are very ugly. */
@@ -119,16 +124,57 @@ static int ec_privkey_export_der(const secp256k1_context *ctx, unsigned char *pr
     return 1;
 }
 
+void *CKey::CopyNewECKey(void *k)
+{
+    EC_KEY *eckey = (EC_KEY *)k;
+    return EC_KEY_dup(eckey);
+}
+
+void CKey::DeleteNewECKey(void *k)
+{
+    EC_KEY *eckey = (EC_KEY *)k;
+    EC_KEY_free(eckey);
+}
+
 bool CKey::Check(const unsigned char *vch) {
     return secp256k1_ec_seckey_verify(secp256k1_context_sign, vch);
 }
 
+bool CKey::CheckEx(const unsigned char *vch) {
+    return false;
+}
+
 void CKey::MakeNewKey(bool fCompressedIn) {
     do {
-        GetStrongRandBytes(vch, sizeof(vch));
+        GetStrongRandBytes(vch, 32);
     } while (!Check(vch));
     fValid = true;
     fCompressed = fCompressedIn;
+}
+
+void CKey::MakeNewKeyEx() {
+    EC_KEY *eckey = EC_KEY_new_by_curve_name(NID_secp384r1);
+    if (eckey == NULL) {
+       return;
+    }
+    //EC_KEY_set_enc_flags(eckey, EC_PKEY_NO_PARAMETERS | EC_PKEY_NO_PUBKEY);
+    if (EC_KEY_generate_key(eckey) == 0) {
+        EC_KEY_free(eckey);
+        return;
+    }
+    const BIGNUM *priv = EC_KEY_get0_private_key(eckey);
+    if (BN_num_bytes(priv) != 48) {
+        EC_KEY_free(eckey);
+        return;
+    }
+    if (BN_bn2bin(priv, vch) < 0) {
+        EC_KEY_free(eckey);
+        return;        
+    }
+    newECKey = eckey;
+    fValid = true;
+    fCompressed = true;
+    fUseNewEC = true;
 }
 
 bool CKey::SetPrivKey(const CPrivKey &privkey, bool fCompressedIn) {
@@ -142,6 +188,16 @@ bool CKey::SetPrivKey(const CPrivKey &privkey, bool fCompressedIn) {
 CPrivKey CKey::GetPrivKey() const {
     assert(fValid);
     CPrivKey privkey;
+    if (fUseNewEC) {
+        assert(newECKey != NULL);
+        EC_KEY *eckey = (EC_KEY *)newECKey;
+        int len = i2d_ECPrivateKey(eckey, NULL);
+        assert(len >= 0);
+        privkey.resize(len);
+        unsigned char *p = &privkey[0];
+        i2d_ECPrivateKey(eckey, &p);
+        return privkey;
+    }
     int ret;
     size_t privkeylen;
     privkey.resize(279);
@@ -154,6 +210,16 @@ CPrivKey CKey::GetPrivKey() const {
 
 CPubKey CKey::GetPubKey() const {
     assert(fValid);
+    if (fUseNewEC) {
+        assert(newECKey != NULL);
+        EC_KEY *eckey = (EC_KEY *)newECKey;
+        CPubKey result;
+        size_t len = EC_POINT_point2oct(EC_KEY_get0_group(eckey), EC_KEY_get0_public_key(eckey), POINT_CONVERSION_COMPRESSED, (unsigned char*)result.begin(), 49, NULL);
+        *(unsigned char*)result.begin() |= 0x80;
+        assert(len == 49);
+        assert(result.IsValid());
+        return result;
+    }
     secp256k1_pubkey pubkey;
     size_t clen = 65;
     CPubKey result;
@@ -168,6 +234,17 @@ CPubKey CKey::GetPubKey() const {
 bool CKey::Sign(const uint256 &hash, std::vector<unsigned char>& vchSig, uint32_t test_case) const {
     if (!fValid)
         return false;
+    if (fUseNewEC) {
+        assert(newECKey != NULL);
+        EC_KEY *eckey = (EC_KEY *)newECKey;
+        ECDSA_SIG *sig = ECDSA_do_sign(hash.begin(), 32, eckey);
+        int len = i2d_ECDSA_SIG(sig, NULL);
+        assert(len >= 0);
+        vchSig.resize(len);
+        unsigned char *p = &vchSig[0];
+        i2d_ECDSA_SIG(sig, &p);
+        return true;
+    }
     vchSig.resize(72);
     size_t nSigLen = 72;
     unsigned char extra_entropy[32] = {0};
@@ -197,6 +274,9 @@ bool CKey::VerifyPubKey(const CPubKey& pubkey) const {
 bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) const {
     if (!fValid)
         return false;
+    if (fUseNewEC) {
+        return Sign(hash, vchSig);
+    }
     vchSig.resize(65);
     int rec = -1;
     secp256k1_ecdsa_recoverable_signature sig;
@@ -210,8 +290,40 @@ bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) 
 }
 
 bool CKey::Load(CPrivKey &privkey, CPubKey &vchPubKey, bool fSkipCheck=false) {
-    if (!ec_privkey_import_der(secp256k1_context_sign, (unsigned char*)begin(), &privkey[0], privkey.size()))
-        return false;
+    if (!ec_privkey_import_der(secp256k1_context_sign, (unsigned char*)begin(), &privkey[0], privkey.size())) {
+        const unsigned char *p = &privkey[0];
+        EC_KEY *eckey = d2i_ECPrivateKey(NULL, &p, privkey.size());
+        if (!eckey) {
+            return false;
+        }
+        /*
+        int name = EC_GROUP_get_curve_name(EC_KEY_get0_group(eckey));
+        if (name != NID_secp384r1) {
+            EC_KEY_free(eckey);
+            return false;
+        }
+        */
+        
+        const BIGNUM *priv = EC_KEY_get0_private_key(eckey);
+        if (BN_num_bytes(priv) != 48) {
+            EC_KEY_free(eckey);
+            return false;
+        }
+        if (BN_bn2bin(priv, vch) < 0) {
+            EC_KEY_free(eckey);
+            return false;        
+        }
+
+        newECKey = eckey;
+        fUseNewEC = true;
+        fCompressed = true;
+        fValid = true;
+
+        if (fSkipCheck)
+            return true;
+
+        return VerifyPubKey(vchPubKey);
+    }
     fCompressed = vchPubKey.IsCompressed();
     fValid = true;
 
@@ -256,7 +368,7 @@ void CExtKey::SetMaster(const unsigned char *seed, unsigned int nSeedLen) {
     unsigned char out[64];
     LockObject(out);
     CHMAC_SHA512(hashkey, sizeof(hashkey)).Write(seed, nSeedLen).Finalize(out);
-    key.Set(&out[0], &out[32], true);
+    key.Set(&out[0], &out[32], true, false);
     memcpy(chaincode.begin(), &out[32], 32);
     UnlockObject(out);
     nDepth = 0;
@@ -290,7 +402,7 @@ void CExtKey::Decode(const unsigned char code[BIP32_EXTKEY_SIZE]) {
     memcpy(vchFingerprint, code+1, 4);
     nChild = (code[5] << 24) | (code[6] << 16) | (code[7] << 8) | code[8];
     memcpy(chaincode.begin(), code+9, 32);
-    key.Set(code+42, code+BIP32_EXTKEY_SIZE, true);
+    key.Set(code+42, code+BIP32_EXTKEY_SIZE, true, false);
 }
 
 bool ECC_InitSanityCheck() {

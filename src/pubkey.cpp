@@ -7,6 +7,10 @@
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 
+#include <openssl/objects.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+
 namespace
 {
 /* Global secp256k1_context object used for verification. */
@@ -167,6 +171,36 @@ static int ecdsa_signature_parse_der_lax(const secp256k1_context* ctx, secp256k1
 bool CPubKey::Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig) const {
     if (!IsValid())
         return false;
+    if (IsNewEC()) {
+        EC_KEY *eckey = EC_KEY_new_by_curve_name(NID_secp384r1);
+        if (eckey == NULL) {
+           return false;
+        }
+
+        unsigned char vch2[49];
+        memcpy(vch2, vch, 49);
+        vch2[0] &= 0x7F;
+
+        EC_POINT *pub = EC_POINT_new(EC_KEY_get0_group(eckey));
+        if (pub == NULL) {
+            EC_KEY_free(eckey);
+            return false;            
+        }
+        if (!EC_POINT_oct2point(EC_KEY_get0_group(eckey), pub, vch2, 49, NULL)) {
+            EC_POINT_free(pub);
+            EC_KEY_free(eckey);
+            return false;
+        }
+        EC_KEY_set_public_key(eckey, pub);
+        EC_POINT_free(pub);
+        
+        int ret = ECDSA_verify(0, hash.begin(), 32, &vchSig[0], vchSig.size(), eckey);
+        EC_KEY_free(eckey);
+        if (ret != 1) {
+            return false;
+        }
+        return true;
+    }
     secp256k1_pubkey pubkey;
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_verify, &pubkey, &(*this)[0], size())) {
@@ -207,6 +241,32 @@ bool CPubKey::RecoverCompact(const uint256 &hash, const std::vector<unsigned cha
 bool CPubKey::IsFullyValid() const {
     if (!IsValid())
         return false;
+    if (IsNewEC()) {
+        EC_KEY *eckey = EC_KEY_new_by_curve_name(NID_secp384r1);
+        if (eckey == NULL) {
+            return false;
+        }
+
+        unsigned char vch2[49];
+        memcpy(vch2, vch, 49);
+        vch2[0] &= 0x7F;
+
+        EC_POINT *pub = EC_POINT_new(EC_KEY_get0_group(eckey));
+        if (pub == NULL) {
+            EC_KEY_free(eckey);
+            return false;            
+        }
+        if (!EC_POINT_oct2point(EC_KEY_get0_group(eckey), pub, vch2, 49, NULL)) {
+            EC_POINT_free(pub);
+            EC_KEY_free(eckey);
+            return false;
+        }
+        EC_KEY_set_public_key(eckey, pub);
+        EC_POINT_free(pub);
+        EC_KEY_free(eckey);
+        return true;
+    }
+        
     secp256k1_pubkey pubkey;
     return secp256k1_ec_pubkey_parse(secp256k1_context_verify, &pubkey, &(*this)[0], size());
 }
@@ -214,6 +274,9 @@ bool CPubKey::IsFullyValid() const {
 bool CPubKey::Decompress() {
     if (!IsValid())
         return false;
+    if (IsNewEC()) {
+        return false;
+    }
     secp256k1_pubkey pubkey;
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_verify, &pubkey, &(*this)[0], size())) {
         return false;

@@ -53,6 +53,8 @@ private:
             return 33;
         if (chHeader == 4 || chHeader == 6 || chHeader == 7)
             return 65;
+        if (chHeader == 0x82 || chHeader == 0x83)
+            return 49;
         return 0;
     }
 
@@ -170,7 +172,12 @@ public:
     //! Check whether this is a compressed public key.
     bool IsCompressed() const
     {
-        return size() == 33;
+        return size() == 33 || size() == 49;
+    }
+
+    bool IsNewEC() const
+    {
+        return size() == 49;
     }
 
     /**

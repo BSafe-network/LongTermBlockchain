@@ -294,7 +294,7 @@ CKey CBitcoinSecret::GetKey()
 {
     CKey ret;
     assert(vchData.size() >= 32);
-    ret.Set(vchData.begin(), vchData.begin() + 32, vchData.size() > 32 && vchData[32] == 1);
+    ret.Set(vchData.begin(), vchData.begin() + 32, vchData.size() > 32 && vchData[32] == 1, false);
     return ret;
 }
 

@@ -86,7 +86,7 @@ const CWalletTx* CWallet::GetWalletTx(const uint256& hash) const
     return &(it->second);
 }
 
-CPubKey CWallet::GenerateNewKey()
+CPubKey CWallet::GenerateNewKey(bool useNewEC)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
     bool fCompressed = CanSupportFeature(FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
@@ -98,7 +98,7 @@ CPubKey CWallet::GenerateNewKey()
     CKeyMetadata metadata(nCreationTime);
 
     // use HD key derivation if HD was enabled during wallet creation
-    if (!hdChain.masterKeyID.IsNull()) {
+    if (!hdChain.masterKeyID.IsNull() && !useNewEC) {
         // for now we use a fixed keypath scheme of m/0'/0'/k
         CKey key;                      //master key seed (256bit)
         CExtKey masterKey;             //hd master key
@@ -137,7 +137,11 @@ CPubKey CWallet::GenerateNewKey()
         if (!CWalletDB(strWalletFile).WriteHDChain(hdChain))
             throw std::runtime_error(std::string(__func__) + ": Writing HD chain model failed");
     } else {
-        secret.MakeNewKey(fCompressed);
+        if (useNewEC) {
+            secret.MakeNewKeyEx();
+        } else {
+            secret.MakeNewKey(fCompressed);
+        }
     }
 
     // Compressed public keys were introduced in version 0.6.0

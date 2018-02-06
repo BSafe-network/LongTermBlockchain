@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
         {
             bool isCompressed = find_value(metadata, "isCompressed").get_bool();
             CKey key;
-            key.Set(exp_payload.begin(), exp_payload.end(), isCompressed);
+            key.Set(exp_payload.begin(), exp_payload.end(), isCompressed, false);
             assert(key.IsValid());
             CBitcoinSecret secret;
             secret.SetKey(key);
