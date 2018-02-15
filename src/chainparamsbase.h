@@ -23,6 +23,8 @@ public:
     static const std::string BSAFENETLT1;
     static const std::string BSAFENETLT2;
     static const std::string BSAFENETLT3;
+    static const std::string BSAFENETLT4;
+    static const std::string BSAFENETLT5;
     
     const std::string& DataDir() const { return strDataDir; }
     int RPCPort() const { return nRPCPort; }
