@@ -2283,6 +2283,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                     // no coin control: send change to newly generated address
                     else
                     {
+#if 0
                         // Note: We use a new key here to keep it from being obvious which side is the change.
                         //  The drawback is that by not reusing a previous key, the change may be lost if a
                         //  backup is restored, if the backup doesn't have the new private key for the change.
@@ -2297,6 +2298,8 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                         assert(ret); // should never fail, as we just unlocked
 
                         scriptChange = GetScriptForDestination(vchPubKey.GetID());
+#endif
+                        scriptChange = GetScriptForDestination(vchDefaultKey.GetID());
                     }
 
                     CTxOut newTxOut(nChange, scriptChange);
